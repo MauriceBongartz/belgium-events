@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #0a0a0a;
+    color: #ffffff;
+  }
+
+  ::selection {
+    background-color: #d4a820;
+    color: #0a0a0a;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #111111;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2a2a;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #d4a820;
+  }
+}
+
+@layer components {
+  .btn-gold {
+    @apply bg-gold-500 text-belgium-black font-semibold px-6 py-3 rounded-none 
+           hover:bg-gold-400 transition-colors duration-200 
+           focus:outline-none focus:ring-2 focus:ring-gold-400 focus:ring-offset-2 focus:ring-offset-belgium-black
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-outline {
+    @apply border border-belgium-border text-white font-medium px-6 py-3 rounded-none
+           hover:border-gold-500 hover:text-gold-400 transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-gold-400 focus:ring-offset-2 focus:ring-offset-belgium-black;
+  }
+
+  .card {
+    @apply bg-belgium-card border border-belgium-border p-6 
+           hover:border-gold-600 transition-all duration-300;
+  }
+
+  .input-field {
+    @apply w-full bg-belgium-black border border-belgium-border text-white 
+           px-4 py-3 font-body text-sm
+           placeholder:text-belgium-muted
+           focus:outline-none focus:border-gold-500 focus:ring-1 focus:ring-gold-500
+           transition-colors duration-200;
+  }
+
+  .label {
+    @apply block text-xs font-mono uppercase tracking-widest text-belgium-muted mb-2;
+  }
+
+  .section-tag {
+    @apply inline-block font-mono text-xs uppercase tracking-widest text-gold-500 
+           border border-gold-800 px-3 py-1 mb-4;
+  }
+
+  .category-badge {
+    @apply font-mono text-xs uppercase tracking-wider px-2 py-1 
+           bg-belgium-black border border-belgium-border text-belgium-muted;
+  }
+}
+
+/* Mapbox overrides */
+.mapboxgl-ctrl-logo {
+  display: none !important;
+}
+.mapboxgl-ctrl-attrib {
+  display: none !important;
+}
+
+/* Staggered fade animation for event cards */
+.event-card:nth-child(1) { animation-delay: 0.05s; }
+.event-card:nth-child(2) { animation-delay: 0.1s; }
+.event-card:nth-child(3) { animation-delay: 0.15s; }
+.event-card:nth-child(4) { animation-delay: 0.2s; }
+.event-card:nth-child(5) { animation-delay: 0.25s; }
+.event-card:nth-child(6) { animation-delay: 0.3s; }
+.event-card:nth-child(7) { animation-delay: 0.35s; }
+.event-card:nth-child(8) { animation-delay: 0.4s; }
+.event-card:nth-child(9) { animation-delay: 0.45s; }
