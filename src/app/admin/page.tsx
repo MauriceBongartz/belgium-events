@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { CATEGORIES } from "@/lib/types";
 import Navbar from "@/components/Navbar";
@@ -14,6 +14,7 @@ type Event = {
   date: string;
   location: string;
   category: string;
+  image_url?: string;
 };
 
 type Review = {
@@ -60,6 +61,11 @@ export default function AdminPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const [formError, setFormError] = useState("");
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -94,7 +100,7 @@ export default function AdminPage() {
     setLoadingEvents(true);
     const { data } = await supabase
       .from("events")
-      .select("id, title, date, location, category")
+      .select("id, title, date, location, category, image_url")
       .order("date", { ascending: true });
     setEvents(data ?? []);
     setLoadingEvents(false);
@@ -123,11 +129,49 @@ export default function AdminPage() {
     await supabase.auth.signOut();
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const uploadImage = async (file: File): Promise<string | null> => {
+    setUploadingImage(true);
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from("event-images")
+      .upload(fileName, file, { cacheControl: "3600", upsert: false });
+
+    if (error) {
+      setFormError("Image upload failed: " + error.message);
+      setUploadingImage(false);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("event-images").getPublicUrl(fileName);
+    setUploadingImage(false);
+    return data.publicUrl;
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
     setSuccessMsg("");
     setSubmitting(true);
+
+    let image_url: string | null = null;
+    if (imageFile) {
+      image_url = await uploadImage(imageFile);
+      if (!image_url) {
+        setSubmitting(false);
+        return;
+      }
+    }
 
     const payload = {
       title: form.title.trim(),
@@ -137,6 +181,7 @@ export default function AdminPage() {
       latitude: form.latitude ? parseFloat(form.latitude) : null,
       longitude: form.longitude ? parseFloat(form.longitude) : null,
       category: form.category,
+      image_url,
     };
 
     const { error } = await supabase.from("events").insert([payload]);
@@ -145,6 +190,9 @@ export default function AdminPage() {
     } else {
       setSuccessMsg(`"${payload.title}" has been published!`);
       setForm(EMPTY_FORM);
+      setImageFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       fetchEvents();
     }
     setSubmitting(false);
@@ -268,11 +316,16 @@ export default function AdminPage() {
               <div className="space-y-3">
                 {events.map((event) => (
                   <div key={event.id} className="flex items-center justify-between border border-belgium-border px-4 py-3">
-                    <div>
-                      <p className="font-semibold text-sm">{event.title}</p>
-                      <p className="font-mono text-xs text-belgium-muted mt-0.5">
-                        {new Date(event.date).toLocaleDateString("en-BE", { day: "numeric", month: "short", year: "numeric" })} · {event.location} · {event.category}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      {event.image_url && (
+                        <img src={event.image_url} alt={event.title} className="w-12 h-12 object-cover border border-belgium-border" />
+                      )}
+                      <div>
+                        <p className="font-semibold text-sm">{event.title}</p>
+                        <p className="font-mono text-xs text-belgium-muted mt-0.5">
+                          {new Date(event.date).toLocaleDateString("en-BE", { day: "numeric", month: "short", year: "numeric" })} · {event.location} · {event.category}
+                        </p>
+                      </div>
                     </div>
                     <button
                       onClick={() => handleDeleteEvent(event.id, event.title)}
@@ -331,6 +384,37 @@ export default function AdminPage() {
               <label className="label">Description *</label>
               <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field min-h-[140px] resize-y" placeholder="Describe your event…" required />
             </div>
+
+            {/* ── IMAGE UPLOAD ── */}
+            <div>
+              <label className="label">Event Image (optional)</label>
+              <div
+                className="border border-dashed border-belgium-border p-6 text-center cursor-pointer hover:border-gold-500 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {imagePreview ? (
+                  <div className="space-y-3">
+                    <img src={imagePreview} alt="Preview" className="max-h-48 mx-auto object-cover" />
+                    <p className="font-mono text-xs text-belgium-muted">{imageFile?.name}</p>
+                    <p className="font-mono text-xs text-gold-500 hover:text-gold-400">Click to change image</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-3xl">📷</div>
+                    <p className="font-mono text-xs text-belgium-muted">Click to upload an image</p>
+                    <p className="font-mono text-xs text-belgium-border">JPG, PNG, WebP — max 5MB</p>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="label">Date & Time *</label>
@@ -360,8 +444,8 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="pt-2">
-              <button type="submit" disabled={submitting} className="btn-gold w-full py-4 text-base">
-                {submitting ? "Publishing…" : "Publish Event →"}
+              <button type="submit" disabled={submitting || uploadingImage} className="btn-gold w-full py-4 text-base">
+                {uploadingImage ? "Uploading image…" : submitting ? "Publishing…" : "Publish Event →"}
               </button>
             </div>
           </form>
