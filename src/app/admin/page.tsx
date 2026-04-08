@@ -16,6 +16,16 @@ type Event = {
   category: string;
 };
 
+type Review = {
+  id: string;
+  author_name: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+  event_id: string;
+  events?: { title: string };
+};
+
 type FormState = {
   title: string;
   description: string;
@@ -40,22 +50,23 @@ export default function AdminPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  // Login state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Form state
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [formError, setFormError] = useState("");
 
-  // Events list
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -72,10 +83,10 @@ export default function AdminPage() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Fetch events when admin is logged in
   useEffect(() => {
     if (user?.email === ADMIN_EMAIL) {
       fetchEvents();
+      fetchReviews();
     }
   }, [user]);
 
@@ -89,12 +100,20 @@ export default function AdminPage() {
     setLoadingEvents(false);
   };
 
-  // ── LOGIN ──────────────────────────────────────────────────────────────────
+  const fetchReviews = async () => {
+    setLoadingReviews(true);
+    const { data } = await supabase
+      .from("reviews")
+      .select("*, events(title)")
+      .order("created_at", { ascending: false });
+    setReviews(data ?? []);
+    setLoadingReviews(false);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError("");
     setLoginLoading(true);
-
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setLoginError(error.message);
     setLoginLoading(false);
@@ -104,7 +123,6 @@ export default function AdminPage() {
     await supabase.auth.signOut();
   };
 
-  // ── CREATE EVENT ───────────────────────────────────────────────────────────
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
@@ -122,7 +140,6 @@ export default function AdminPage() {
     };
 
     const { error } = await supabase.from("events").insert([payload]);
-
     if (error) {
       setFormError(error.message);
     } else {
@@ -133,8 +150,7 @@ export default function AdminPage() {
     setSubmitting(false);
   };
 
-  // ── DELETE EVENT ───────────────────────────────────────────────────────────
-  const handleDelete = async (id: string, title: string) => {
+  const handleDeleteEvent = async (id: string, title: string) => {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
     setDeletingId(id);
     const { error } = await supabase.from("events").delete().eq("id", id);
@@ -142,11 +158,23 @@ export default function AdminPage() {
       alert("Error deleting event: " + error.message);
     } else {
       setEvents((prev) => prev.filter((e) => e.id !== id));
+      fetchReviews();
     }
     setDeletingId(null);
   };
 
-  // ── RENDER STATES ──────────────────────────────────────────────────────────
+  const handleDeleteReview = async (id: string, author: string) => {
+    if (!confirm(`Delete review by "${author}"?`)) return;
+    setDeletingReviewId(id);
+    const { error } = await supabase.from("reviews").delete().eq("id", id);
+    if (error) {
+      alert("Error deleting review: " + error.message);
+    } else {
+      setReviews((prev) => prev.filter((r) => r.id !== id));
+    }
+    setDeletingReviewId(null);
+  };
+
   if (loadingUser) {
     return (
       <>
@@ -166,38 +194,18 @@ export default function AdminPage() {
           <div className="w-full max-w-sm">
             <div className="section-tag">Admin access</div>
             <h1 className="font-display text-3xl font-bold mb-8">Sign in</h1>
-
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
                 <label className="label">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-field"
-                  placeholder="your@email.com"
-                  required
-                />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-field" placeholder="your@email.com" required />
               </div>
-
               <div>
                 <label className="label">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input-field"
-                  placeholder="••••••••"
-                  required
-                />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-field" placeholder="••••••••" required />
               </div>
-
               {loginError && (
-                <p className="font-mono text-xs text-red-500 border border-red-900 px-3 py-2">
-                  {loginError}
-                </p>
+                <p className="font-mono text-xs text-red-500 border border-red-900 px-3 py-2">{loginError}</p>
               )}
-
               <button type="submit" disabled={loginLoading} className="btn-gold w-full">
                 {loginLoading ? "Signing in…" : "Sign in"}
               </button>
@@ -227,7 +235,6 @@ export default function AdminPage() {
     );
   }
 
-  // ── ADMIN DASHBOARD ────────────────────────────────────────────────────────
   return (
     <>
       <Navbar />
@@ -240,26 +247,17 @@ export default function AdminPage() {
               <h1 className="font-display text-3xl font-bold">Manage Events</h1>
               <p className="text-belgium-muted text-sm mt-1">{user.email}</p>
             </div>
-            <button onClick={handleLogout} className="btn-outline text-sm px-4 py-2">
-              Sign out
-            </button>
+            <button onClick={handleLogout} className="btn-outline text-sm px-4 py-2">Sign out</button>
           </div>
 
-          {/* Success */}
           {successMsg && (
-            <div className="border border-green-800 bg-green-950/30 px-4 py-3 mb-6 font-mono text-sm text-green-400">
-              ✓ {successMsg}
-            </div>
+            <div className="border border-green-800 bg-green-950/30 px-4 py-3 mb-6 font-mono text-sm text-green-400">✓ {successMsg}</div>
           )}
-
-          {/* Error */}
           {formError && (
-            <div className="border border-red-800 bg-red-950/30 px-4 py-3 mb-6 font-mono text-sm text-red-400">
-              ✗ {formError}
-            </div>
+            <div className="border border-red-800 bg-red-950/30 px-4 py-3 mb-6 font-mono text-sm text-red-400">✗ {formError}</div>
           )}
 
-          {/* ── EXISTING EVENTS ── */}
+          {/* ── EVENTS ── */}
           <div className="mb-12">
             <h2 className="font-display text-xl font-bold mb-4">Your Events</h2>
             {loadingEvents ? (
@@ -269,23 +267,15 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-3">
                 {events.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-center justify-between border border-belgium-border px-4 py-3"
-                  >
+                  <div key={event.id} className="flex items-center justify-between border border-belgium-border px-4 py-3">
                     <div>
                       <p className="font-semibold text-sm">{event.title}</p>
                       <p className="font-mono text-xs text-belgium-muted mt-0.5">
-                        {new Date(event.date).toLocaleDateString("en-BE", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}{" "}
-                        · {event.location} · {event.category}
+                        {new Date(event.date).toLocaleDateString("en-BE", { day: "numeric", month: "short", year: "numeric" })} · {event.location} · {event.category}
                       </p>
                     </div>
                     <button
-                      onClick={() => handleDelete(event.id, event.title)}
+                      onClick={() => handleDeleteEvent(event.id, event.title)}
                       disabled={deletingId === event.id}
                       className="ml-4 text-xs font-mono text-red-500 border border-red-900 px-3 py-1 hover:bg-red-950/40 transition-colors disabled:opacity-50"
                     >
@@ -297,101 +287,80 @@ export default function AdminPage() {
             )}
           </div>
 
+          {/* ── REVIEWS ── */}
+          <div className="mb-12">
+            <h2 className="font-display text-xl font-bold mb-4">Reviews</h2>
+            {loadingReviews ? (
+              <p className="font-mono text-xs text-belgium-muted animate-pulse">Loading reviews…</p>
+            ) : reviews.length === 0 ? (
+              <p className="font-mono text-xs text-belgium-muted">No reviews yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {reviews.map((review) => (
+                  <div key={review.id} className="border border-belgium-border px-4 py-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-sm">{review.author_name}</p>
+                        <p className="font-mono text-xs text-belgium-muted mt-0.5">
+                          {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)} · {review.events?.title ?? "Unknown event"}
+                        </p>
+                        <p className="text-gray-300 text-xs mt-2 leading-relaxed">{review.comment}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteReview(review.id, review.author_name)}
+                        disabled={deletingReviewId === review.id}
+                        className="shrink-0 text-xs font-mono text-red-500 border border-red-900 px-3 py-1 hover:bg-red-950/40 transition-colors disabled:opacity-50"
+                      >
+                        {deletingReviewId === review.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* ── CREATE FORM ── */}
           <h2 className="font-display text-xl font-bold mb-6">Create New Event</h2>
           <form onSubmit={handleCreate} className="space-y-6">
             <div>
               <label className="label">Title *</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="input-field"
-                placeholder="e.g. Jazz Night at Ancienne Belgique"
-                required
-              />
+              <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input-field" placeholder="e.g. Jazz Night at Ancienne Belgique" required />
             </div>
-
             <div>
               <label className="label">Description *</label>
-              <textarea
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="input-field min-h-[140px] resize-y"
-                placeholder="Describe your event…"
-                required
-              />
+              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input-field min-h-[140px] resize-y" placeholder="Describe your event…" required />
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="label">Date & Time *</label>
-                <input
-                  type="datetime-local"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="input-field"
-                  required
-                />
+                <input type="datetime-local" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="input-field" required />
               </div>
-
               <div>
                 <label className="label">Category *</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="input-field appearance-none cursor-pointer"
-                >
+                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field appearance-none cursor-pointer">
                   {CATEGORIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
               </div>
             </div>
-
             <div>
               <label className="label">Location *</label>
-              <input
-                type="text"
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="input-field"
-                placeholder="e.g. Ancienne Belgique, Brussels"
-                required
-              />
+              <input type="text" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} className="input-field" placeholder="e.g. Ancienne Belgique, Brussels" required />
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label className="label">Latitude (optional)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={form.latitude}
-                  onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-                  className="input-field"
-                  placeholder="50.8503"
-                />
+                <input type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} className="input-field" placeholder="50.8503" />
               </div>
               <div>
                 <label className="label">Longitude (optional)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={form.longitude}
-                  onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-                  className="input-field"
-                  placeholder="4.3517"
-                />
+                <input type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} className="input-field" placeholder="4.3517" />
               </div>
             </div>
-
             <div className="pt-2">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-gold w-full py-4 text-base"
-              >
+              <button type="submit" disabled={submitting} className="btn-gold w-full py-4 text-base">
                 {submitting ? "Publishing…" : "Publish Event →"}
               </button>
             </div>
@@ -401,9 +370,7 @@ export default function AdminPage() {
             <p className="font-mono text-xs text-belgium-muted mb-2 uppercase tracking-widest">Tip — finding coordinates</p>
             <p className="text-xs text-belgium-border leading-relaxed">
               Right-click any location on{" "}
-              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="text-gold-600 hover:text-gold-400">
-                Google Maps
-              </a>{" "}
+              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" className="text-gold-600 hover:text-gold-400">Google Maps</a>{" "}
               and select &quot;What&apos;s here?&quot; to get the exact coordinates.
             </p>
           </div>
