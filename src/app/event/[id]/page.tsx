@@ -4,6 +4,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import Navbar from "@/components/Navbar";
 import dynamic from "next/dynamic";
+import ReviewSection from "@/components/ReviewSection";
 
 const EventMap = dynamic(() => import("@/components/EventMap"), { ssr: false });
 
@@ -22,6 +23,12 @@ export default async function EventDetailPage({ params }: PageProps) {
     .single();
 
   if (error || !event) notFound();
+
+  const { data: reviews } = await supabase
+    .from("reviews")
+    .select("*")
+    .eq("event_id", id)
+    .order("created_at", { ascending: false });
 
   const eventDate = new Date(event.date);
   const isPast = eventDate < new Date();
@@ -77,7 +84,6 @@ export default async function EventDetailPage({ params }: PageProps) {
                   {format(eventDate, "HH:mm")}
                 </p>
               </div>
-
               <div className="border border-belgium-border p-4">
                 <p className="label">Location</p>
                 <p className="font-display text-lg font-semibold leading-snug">
@@ -90,18 +96,16 @@ export default async function EventDetailPage({ params }: PageProps) {
           {/* Description */}
           <div className="mb-10">
             <p className="label mb-4">About this event</p>
-            <div className="prose prose-invert max-w-none">
-              {event.description.split("\n").map((para: string, i: number) => (
-                <p key={i} className="text-gray-300 leading-relaxed mb-4">
-                  {para}
-                </p>
-              ))}
-            </div>
+            {event.description.split("\n").map((para: string, i: number) => (
+              <p key={i} className="text-gray-300 leading-relaxed mb-4">
+                {para}
+              </p>
+            ))}
           </div>
 
           {/* Map */}
           {event.latitude && event.longitude && (
-            <div className="mb-8">
+            <div className="mb-10">
               <p className="label mb-4">Location on map</p>
               <EventMap
                 latitude={event.latitude}
@@ -114,7 +118,10 @@ export default async function EventDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          <div className="border-t border-belgium-border pt-6">
+          {/* Reviews */}
+          <ReviewSection eventId={id} initialReviews={reviews ?? []} />
+
+          <div className="border-t border-belgium-border pt-6 mt-10">
             <p className="font-mono text-xs text-belgium-border">
               Added {format(new Date(event.created_at), "MMM d, yyyy")}
             </p>
