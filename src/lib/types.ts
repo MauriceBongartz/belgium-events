@@ -7,6 +7,7 @@ export interface Event {
   latitude: number | null;
   longitude: number | null;
   category: string;
+  image_url: string | null;
   created_at: string;
 }
 
