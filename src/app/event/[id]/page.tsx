@@ -1,116 +1,139 @@
-import { createClient } from "@/lib/supabase/server";
-import { notFound } from "next/navigation";
-import Link from "next/link";
-import { format } from "date-fns";
+"use client";
+
+import { useEffect, useState, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Event } from "@/lib/types";
+import EventCard from "@/components/EventCard";
+import FilterBar from "@/components/FilterBar";
 import Navbar from "@/components/Navbar";
-import dynamic from "next/dynamic";
+import {
+  startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO
+} from "date-fns";
 
-const EventMap = dynamic(() => import("@/components/EventMap"), { ssr: false });
+export default function HomePage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [category, setCategory] = useState("all");
+  const [timeFilter, setTimeFilter] = useState("all");
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
+  useEffect(() => {
+    const fetchEvents = async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .order("date", { ascending: true });
 
-export default async function EventDetailPage({ params }: PageProps) {
-  const { id } = await params;
-  const supabase = await createClient();
+      if (!error && data) setEvents(data);
+      setLoading(false);
+    };
 
-  const { data: event, error } = await supabase
-    .from("events")
-    .select("*")
-    .eq("id", id)
-    .single();
+    fetchEvents();
+  }, []);
 
-  if (error || !event) notFound();
+  const filtered = useMemo(() => {
+    const now = new Date();
+    return events.filter((e) => {
+      // Category filter
+      if (category !== "all" && e.category !== category) return false;
 
-  const eventDate = new Date(event.date);
-  const isPast = eventDate < new Date();
+      // Time filter
+      const d = parseISO(e.date);
+      if (timeFilter === "upcoming" && d < now) return false;
+      if (timeFilter === "this-week") {
+        const start = startOfWeek(now, { weekStartsOn: 1 });
+        const end = endOfWeek(now, { weekStartsOn: 1 });
+        if (d < start || d > end) return false;
+      }
+      if (timeFilter === "this-month") {
+        const start = startOfMonth(now);
+        const end = endOfMonth(now);
+        if (d < start || d > end) return false;
+      }
+
+      return true;
+    });
+  }, [events, category, timeFilter]);
 
   return (
     <>
       <Navbar />
       <main className="min-h-screen pt-16">
-        <div className="max-w-3xl mx-auto px-6 py-12">
-          {/* Back */}
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-belgium-muted hover:text-gold-400 transition-colors mb-8"
-          >
-            <span>←</span>
-            <span>All events</span>
-          </Link>
-
-          {/* Header */}
-          <div className="border-b border-belgium-border pb-8 mb-8">
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="category-badge">{event.category}</span>
-              {isPast && (
-                <span className="font-mono text-xs uppercase tracking-wider px-2 py-1 bg-belgium-black border border-red-900 text-red-700">
-                  Past event
-                </span>
-              )}
-            </div>
-
-            <h1 className="font-display text-3xl md:text-5xl font-bold leading-tight mb-6">
-              {event.title}
-            </h1>
-
-            {/* Meta grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="border border-belgium-border p-4">
-                <p className="label">Date & Time</p>
-                <p className="font-display text-lg font-semibold">
-                  {format(eventDate, "EEEE, MMMM d, yyyy")}
-                </p>
-                <p className="text-gold-500 font-mono text-sm mt-1">
-                  {format(eventDate, "HH:mm")}
-                </p>
-              </div>
-
-              <div className="border border-belgium-border p-4">
-                <p className="label">Location</p>
-                <p className="font-display text-lg font-semibold leading-snug">
-                  {event.location}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Description */}
-          <div className="mb-10">
-            <p className="label mb-4">About this event</p>
-            <div className="prose prose-invert max-w-none">
-              {event.description.split("\n").map((para: string, i: number) => (
-                <p key={i} className="text-gray-300 leading-relaxed mb-4">
-                  {para}
-                </p>
-              ))}
-            </div>
-          </div>
-
-          {/* Map */}
-          {event.latitude && event.longitude && (
-            <div className="mb-8">
-              <p className="label mb-4">Location on map</p>
-              <EventMap
-                latitude={event.latitude}
-                longitude={event.longitude}
-                title={event.title}
-              />
-              <p className="font-mono text-xs text-belgium-muted mt-2">
-                {event.latitude.toFixed(6)}, {event.longitude.toFixed(6)}
+        {/* Hero */}
+        <section className="border-b border-belgium-border">
+          <div className="max-w-6xl mx-auto px-6 py-16 md:py-24">
+            <div className="max-w-3xl">
+              <div className="section-tag">Belgium · Events</div>
+              <h1 className="font-display text-4xl md:text-6xl font-bold leading-tight mb-4">
+                What&apos;s happening
+                <br />
+                <span className="text-gold-500">in Belgium</span>
+              </h1>
+              <p className="text-belgium-muted text-lg max-w-xl">
+                Discover concerts, festivals, cultural happenings, and more across Belgium.
               </p>
             </div>
-          )}
-
-          {/* Footer meta */}
-          <div className="border-t border-belgium-border pt-6">
-            <p className="font-mono text-xs text-belgium-border">
-              Added {format(new Date(event.created_at), "MMM d, yyyy")}
-            </p>
           </div>
-        </div>
+        </section>
+
+        {/* Events */}
+        <section className="max-w-6xl mx-auto px-6 py-12">
+          <FilterBar
+            selectedCategory={category}
+            selectedTime={timeFilter}
+            onCategoryChange={setCategory}
+            onTimeChange={setTimeFilter}
+          />
+
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="card animate-pulse">
+                  <div className="h-4 bg-belgium-border rounded mb-4 w-1/3" />
+                  <div className="h-6 bg-belgium-border rounded mb-3" />
+                  <div className="h-4 bg-belgium-border rounded w-2/3" />
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-24">
+              <div className="text-5xl mb-4">🇧🇪</div>
+              <p className="font-display text-xl text-belgium-muted mb-2">No events found</p>
+              <p className="text-sm text-belgium-border">
+                {events.length === 0 ? "Check back soon — events coming!" : "Try adjusting your filters"}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <p className="font-mono text-xs text-belgium-muted uppercase tracking-widest">
+                  {filtered.length} event{filtered.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filtered.map((event, i) => (
+                  <EventCard key={event.id} event={event} index={i} />
+                ))}
+              </div>
+            </>
+          )}
+        </section>
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-belgium-border mt-16">
+        <div className="max-w-6xl mx-auto px-6 py-8 flex items-center justify-between">
+          <div className="flex gap-1 items-center">
+            <div className="w-1.5 h-4 bg-black border border-gold-900" />
+            <div className="w-1.5 h-4 bg-gold-500" />
+            <div className="w-1.5 h-4 bg-red-600" />
+            <span className="ml-2 font-mono text-xs text-belgium-muted">Belgium Events</span>
+          </div>
+          <p className="font-mono text-xs text-belgium-border">
+            {new Date().getFullYear()}
+          </p>
+        </div>
+      </footer>
     </>
   );
 }
